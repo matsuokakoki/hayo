@@ -1,104 +1,193 @@
-# GatherQuest — 待ち合わせエンタメ化アプリ
+# hayo — 待ち合わせをエンタメ化するアプリ
 
-期間限定の位置情報共有＆フォトミッションアプリ (iOS / SwiftUI + Firebase)。
-全員集合から10分後にグループデータは自動消去されます。
+> NxTEND THE HACK 2026 / Team 25
 
-## 構成
+「あと何分？」「今どこ？」——待ち合わせの退屈な連絡を、位置情報共有とフォトミッションでゲームに変えるiOSアプリです。
+
+グループは使い捨てで、**全員が集合した10分後にすべてのデータ（位置情報・写真）が自動的に完全消去されます**。アカウント登録も不要で、その場限りの体験に振り切っています。
+
+---
+
+## 主な機能
+
+| 機能 | 内容 |
+|---|---|
+| **リアルタイム位置共有** | 出発したメンバーの現在地を地図上に表示。ピンは出発時に撮った本人の丸型写真になります |
+| **「はよ」催促** | 出発予定時刻を過ぎても動かないメンバーを急かせます。押された回数が `×N` で溜まり、本人に通知が飛びます |
+| **フォトミッション** | 移動中にランダムなお題が突然配信されます。2分以内に写真を投稿するとクリア（青チェック） |
+| **フォトチャット** | お題以外にも自由に写真を撮って共有。キャプションを重ねて投稿でき、👍と「はよ」でリアクションできます |
+| **到着ランキング** | 集合時間との差（±分）とミッションクリア数で順位を表示 |
+| **10分後の自動消滅** | Cloud Functions が Firestore と Storage のデータを完全削除します |
+
+## 画面フロー
 
 ```
-GatherQuest/
-├── ios/GatherQuest/        # SwiftUI アプリ (Xcodeプロジェクトに追加する)
-│   ├── App/                # エントリポイント・画面遷移
-│   ├── Models/             # Firestoreデータモデル
-│   ├── Services/           # Auth/Firestore/Storage/位置情報/カメラ/通知
-│   └── Views/              # 全12画面 (テンプレート準拠)
-├── functions/              # Cloud Functions (ミッション配信・自動削除)
-├── firestore.rules         # Firestoreセキュリティルール
-├── storage.rules           # Storageセキュリティルール
+① スタート ──┬─ グループを作成 → ② 作成画面 → ③ 招待コード ─┐
+             │                                              ├→ ④ プロフィール入力 → ⑤ ロビー
+             └─ コード入力 ────────────────────────────────┘
+                                                                    │
+                    ┌───────────────────────────────────────────────┤
+                    ↓                    ↓                          ↓
+              ⑥ MAP画面          ⑦ SNAP（写真一覧）        ⑪ カメラ → ⑫ プレビュー
+                    │                    │                          │
+                    └────────────────────┴──────────────────────────┘
+                                         ↓
+                                  ⑩ 到着ランキング → 解散
+```
+
+⑤〜⑧の上部には、ミッション内容と残り時間を表示する赤い共通ヘッダー（⑨）が重なります。
+
+---
+
+## 技術スタック
+
+**iOS（Swift 5 / SwiftUI, iOS 16+）**
+
+- SwiftUI — 全画面をコードで構築
+- Google Maps SDK for iOS — 地図・ピン表示・目的地選択
+- CoreLocation — 位置情報取得（`distanceFilter` によるフィルタリング）
+- AVFoundation — カメラ制御（BeReal風の丸型UI・倍率切替・イン/アウト切替）
+- UserNotifications — アプリ内バナー＋ローカル通知
+
+**バックエンド（Firebase）**
+
+- Authentication（匿名認証）— アカウント登録不要
+- Cloud Firestore — グループ・メンバー・写真のリアルタイム同期
+- Cloud Storage — 写真の保存
+- Cloud Functions（Node.js 20 / asia-northeast1）— ミッション配信・到着判定・自動削除
+
+## ディレクトリ構成
+
+```
+.
+├── GatherQuest/                    # Xcodeプロジェクト
+│   ├── GatherQuest.xcodeproj
+│   ├── GoogleService-Info.plist
+│   └── GatherQuest/
+│       ├── App/HayoApp.swift       # エントリポイント・匿名認証・画面遷移
+│       ├── Models/Models.swift     # Firestoreデータモデル
+│       ├── Services/               # Firestore / Storage / 位置情報 / カメラ / 通知
+│       ├── Views/                  # 全12画面 + 共通コンポーネント
+│       ├── Assets.xcassets         # アプリアイコン
+│       └── Info.plist              # 権限設定・表示名
+├── functions/index.js              # Cloud Functions
+├── firestore.rules                 # Firestoreセキュリティルール
+├── storage.rules                   # Storageセキュリティルール
 └── firebase.json
 ```
 
-## 1. Firebase セットアップ（未作成の場合）
+---
 
-1. [Firebase Console](https://console.firebase.google.com) → 「プロジェクトを追加」→ 名前例 `gatherquest`。
-2. **iOSアプリを追加**: Bundle ID を `com.yourname.GatherQuest` などに設定 → `GoogleService-Info.plist` をダウンロード。
-3. **Authentication** → Sign-in method → **匿名** を有効化。
-4. **Firestore Database** → データベースを作成 → 本番モード → ロケーション `asia-northeast1`。
-5. **Storage** → 開始する（同ロケーション）。
-6. **料金プランを Blaze にアップグレード**（Cloud Functions のスケジュール実行に必須。無料枠内でほぼ収まります）。
-7. ローカルで:
-   ```bash
-   npm install -g firebase-tools
-   firebase login
-   cd GatherQuest
-   firebase use --add   # 作成したプロジェクトを選択
-   firebase deploy --only firestore:rules,storage
-   cd functions && npm install && cd ..
-   firebase deploy --only functions
-   ```
+## 設計上の判断
 
-## 2. Google Maps API キー
+ハッカソンという時間制約の中で、以下の方針を採りました。
 
-1. [Google Cloud Console](https://console.cloud.google.com)（Firebaseと同じプロジェクトでOK）→ 「APIとサービス」→ **Maps SDK for iOS** を有効化。
-2. 認証情報 → APIキーを作成（iOSアプリ制限＋Bundle ID を推奨）。
-3. `ios/GatherQuest/App/GatherQuestApp.swift` の `YOUR_GOOGLE_MAPS_API_KEY` を置き換え。
-4. ※Maps SDK は課金有効なプロジェクトが必要です（無料クレジット枠あり）。
+**プッシュ通知（APNs）を使わない**
 
-## 3. Xcode プロジェクト作成
+証明書の設定に時間を取られるリスクを避け、Firestoreの変更監視 → アプリ内バナー＋ローカル通知という構成にしました。アプリ使用中も即座に通知が表示されるよう `UNUserNotificationCenterDelegate` で前景表示を有効化しています。体験上の差はほとんどなく、設定不備で通知が一切届かないリスクを排除できます。
 
-1. Xcode → New Project → **iOS App** → 名前 `GatherQuest`, Interface: **SwiftUI**, Language: **Swift**。最低ターゲット **iOS 16**。
-2. `ios/GatherQuest/` 内の `App/ Models/ Services/ Views/` フォルダをプロジェクトにドラッグ（"Copy items if needed" + ターゲットにチェック）。Xcodeが自動生成した `GatherQuestApp.swift`・`ContentView.swift` は削除。
-3. `GoogleService-Info.plist` をプロジェクト直下に追加。
-4. **Swift Package Manager** で以下を追加 (File → Add Package Dependencies):
-   - `https://github.com/firebase/firebase-ios-sdk` → **FirebaseAuth / FirebaseFirestore / FirebaseFirestoreSwift(SDK10の場合) / FirebaseStorage** を選択
-   - `https://github.com/googlemaps/ios-maps-sdk` → **GoogleMaps**
-5. **Info.plist に以下のキーを追加**:
+**位置情報の書き込み頻度を制限**
 
-   | Key | 値の例 |
-   |---|---|
-   | `NSCameraUsageDescription` | 出発写真・ミッション写真の撮影に使用します |
-   | `NSLocationWhenInUseUsageDescription` | メンバーに現在地を共有するために使用します |
-   | `LSApplicationQueriesSchemes` | (Array) `comgooglemaps` |
+CoreLocationの値をそのままFirestoreに流すと書き込みが爆発します。`distanceFilter = 10m`（OS側の間引き）と**15秒に1回まで**（アプリ側の間引き）の二段構えで抑制しています。加えて出発ボタンを押した瞬間だけは即時書き込みを行い、ピンがすぐ表示されるようにしています。
 
-6. Signing & Capabilities でチームを設定 → 実機で Run。
-   （カメラ・位置情報のためシミュレータより実機推奨。シミュレータでは Features → Location でダミー位置を設定可能。）
+**リアクションは1人1回**
 
-## 4. 動作フロー
+`likedBy` / `hayoBy` に反応済みユーザーIDを保持し、連打による水増しを防いでいます。
 
-作成者: グループ作成 → 目的地を地図タップで選択 → 集合時間 → 招待コード発行 → 名前・出発予定時刻入力 → ロビー。
-参加者: コード入力 → 名前・出発予定時刻入力 → ロビー（最大8人）。
+**Dynamic Island（Live Activities）は未実装**
 
-- **はよ催促**: 出発予定時刻を過ぎた未出発メンバーに「はよ」ボタンが有効化。押すと ×N 表示＋本人に通知。
-- **出発**: 丸型(BeReal風)カメラでアイコン撮影 → 位置共有開始 → 地図上に丸アイコンピン。最初の1人の出発で Cloud Functions がランダム時刻のミッション3件をスケジュール。
-- **フォトミッション**: 配信から2分以内の投稿でクリア（青チェック）。2分超過でも投稿は可能（クリア判定なし）。
-- **到着**: 到着ボタン → 到着写真撮影。全員到着で到着ランキング表示（集合時間との差±、ミッションクリア数バッジ）。
-- **自動削除**: 全員集合10分後、Cloud Functions が Firestore + Storage のグループデータを完全削除。アプリはスタート画面へ戻ります。
+コア機能の完成を優先したため、Nice-to-have として見送りました。
 
-## 5. リスクヘッジ方針（実装済み）
+---
 
-- プッシュ通知は **APNs不使用**。Firestore監視＋アプリ内バナー＋ローカル通知で実装（FCMは後日）。
-- 位置情報書き込みは **distanceFilter 50m ＋ 最短15秒間隔** のダブルスロットルで Firestore Writes を抑制。
-- Dynamic Island (Live Activities) は未実装（Nice-to-have）。
+## セットアップ
 
-## 6. Firestore データモデル
+### 1. Firebase
+
+1. [Firebase Console](https://console.firebase.google.com) でプロジェクトを作成
+2. iOSアプリを追加（Bundle ID を設定）→ `GoogleService-Info.plist` をダウンロードし `GatherQuest/` 直下に配置
+3. Authentication → Sign-in method → **匿名** を有効化
+4. Firestore Database を作成（本番モード / `asia-northeast1`）
+5. Storage を開始（同ロケーション）
+6. 料金プランを **Blaze** にアップグレード（Cloud Functionsのスケジュール実行に必須）
+
+```bash
+npm install -g firebase-tools
+firebase login
+firebase use --add                              # プロジェクトを選択
+firebase deploy --only firestore:rules,storage
+cd functions && npm install && cd ..
+firebase deploy --only functions
+```
+
+第2世代Functionsの初回デプロイは、Eventarcの権限伝播のため失敗することがあります。5〜10分待って再実行してください。
+
+### 2. Google Maps API キー
+
+1. [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → **Maps SDK for iOS** を有効化
+2. Credentials → APIキーを作成
+3. **Application restrictions を「iOS apps」にし、Bundle ID を登録**（キーの悪用防止）
+4. **API restrictions を「Maps SDK for iOS」のみ**に制限
+5. `App/HayoApp.swift` の `GMSServices.provideAPIKey(...)` に設定
+
+### 3. Xcode
+
+1. `GatherQuest/GatherQuest.xcodeproj` を開く
+2. File → Add Package Dependencies で以下を追加
+   - `https://github.com/firebase/firebase-ios-sdk` → FirebaseAuth / FirebaseFirestore / FirebaseStorage
+   - `https://github.com/googlemaps/ios-maps-sdk` → GoogleMaps
+3. Signing & Capabilities でTeamを設定
+4. 実機を接続して Run
+
+`Info.plist` には以下を設定済みです。
+
+| Key | 用途 |
+|---|---|
+| `CFBundleDisplayName` | アプリ表示名（hayo） |
+| `NSCameraUsageDescription` | カメラ利用の説明 |
+| `NSLocationWhenInUseUsageDescription` | 位置情報利用の説明 |
+| `LSApplicationQueriesSchemes` | Googleマップアプリへの遷移 |
+
+カメラと位置情報のため**実機での動作確認を推奨**します。シミュレータの場合は Features → Location でダミー位置を設定してください。
+
+---
+
+## Firestore データモデル
 
 ```
 groups/{groupId}
   name, destination(GeoPoint), meetTime, status(waiting|active|finished),
   inviteCode, createdAt, missionsScheduled, finishedAt
+
 groups/{groupId}/members/{userId}
-  name, expectedDepartureTime, status(not_departed|departed|arrived),
+  name, expectedDepartureTime, departureTime, status(not_departed|departed|arrived),
   location(GeoPoint), iconUrl, hayoCount, arrivalTime, clearedCount
-groups/{groupId}/missions/{missionId}
-  title, publishAt, expiresAt        # Cloud Functionsのみが作成
+
+groups/{groupId}/missions/{missionId}          # Cloud Functionsのみが作成
+  title, publishAt, expiresAt
+
 groups/{groupId}/photos/{photoId}
-  userId, missionId?, photoType(mission|snap|arrival), imageUrl,
-  caption, timestamp, isCleared, likeCount, hayoReactionCount
+  userId, missionId?, photoType(mission|snap|arrival), imageUrl, caption,
+  timestamp, isCleared, likeCount, hayoReactionCount, likedBy[], hayoBy[]
 ```
+
+## Cloud Functions
+
+| 関数 | トリガー | 処理 |
+|---|---|---|
+| `onMemberUpdate` | メンバー更新時 | 最初の1人が出発したらミッション3件をランダム時刻でスケジュール。全員到着でグループを `finished` に |
+| `cleanupGroups` | 毎分（スケジュール） | 集合完了から10分経過したグループのFirestore・Storageデータを完全削除 |
+
+---
 
 ## トラブルシューティング
 
-- ビルドエラー `FirebaseFirestoreSwift`: SDK 11以降は `FirebaseFirestore` に統合済み。SDK 10.x を使う場合のみ `FirebaseFirestoreSwift` を追加してください。
-- 地図が真っ白: APIキー未設定か Maps SDK for iOS が未有効化。
-- ミッションが届かない: Functions のデプロイと Blaze プラン、region (`asia-northeast1`) を確認。
-- グループが消えない: `cleanupGroups` はスケジュール実行（毎分）。Cloud Scheduler の有効化に初回数分かかることがあります。
+**地図が真っ白** — APIキーが未設定か、Maps SDK for iOS が未有効化。キー制限の変更直後は反映に数分かかります。
+
+**ミッションが届かない** — Functionsのデプロイ状況、Blazeプラン、リージョン（`asia-northeast1`）を確認してください。
+
+**グループが消えない** — `cleanupGroups` は毎分実行です。Cloud Schedulerの初回有効化に数分かかることがあります。
+
+**ビルドエラー `FirebaseFirestoreSwift`** — SDK 11以降は `FirebaseFirestore` に統合済みです。SDK 10.x を使う場合のみ追加してください。
+
+**地図にピンが出ない** — 位置情報の権限が「許可しない」になっていないか、また出発ボタンを押して `departed` 状態になっているかご確認ください。
