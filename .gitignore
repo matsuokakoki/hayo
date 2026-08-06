@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+.swiftpm/
+Packages/
+*.moved-aside
+
+# Node (Cloud Functions)
+node_modules/
+npm-debug.log*
+.firebase/
+*.log
+
+# Secrets (uncomment if the repository is public)
+# GoogleService-Info.plist
