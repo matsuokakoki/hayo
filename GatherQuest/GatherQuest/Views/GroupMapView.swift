@@ -73,18 +73,18 @@ struct MembersMap: UIViewRepresentable {
 
         func applyIcon(member: Member, to marker: GMSMarker) {
             guard let urlString = member.iconUrl else { return }
+            let arrived = member.status == .arrived
             if let cached = iconCache[urlString] {
-                marker.iconView = Self.circleView(image: cached, arrived: member.status == .arrived)
+                marker.iconView = Self.circleView(image: cached, arrived: arrived)
                 return
             }
-            guard let url = URL(string: urlString) else { return }
-            URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-                guard let self, let data, let image = UIImage(data: data) else { return }
-                DispatchQueue.main.async {
-                    self.iconCache[urlString] = image
-                    marker.iconView = Self.circleView(image: image, arrived: member.status == .arrived)
-                }
-            }.resume()
+            // Shared cache — the same icon is reused by the lobby list and detail views.
+            Task { @MainActor [weak self] in
+                guard let image = await ImageLoader.shared.image(for: urlString, targetPoints: 52)
+                else { return }
+                self?.iconCache[urlString] = image
+                marker.iconView = Self.circleView(image: image, arrived: arrived)
+            }
         }
 
         /// Circular photo pin (BeReal-style icon on the map).

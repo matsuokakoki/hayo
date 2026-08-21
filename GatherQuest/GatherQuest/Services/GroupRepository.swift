@@ -165,7 +165,8 @@ final class GroupRepository: ObservableObject {
 
     // MARK: - Photos
 
-    func postPhoto(groupId: String, imageUrl: String, caption: String, purpose: CameraPurpose) async throws {
+    func postPhoto(groupId: String, imageUrl: String, thumbUrl: String? = nil,
+                   caption: String, purpose: CameraPurpose) async throws {
         guard let uid = myUserId else { throw AppError.notSignedIn }
         var missionId: String? = nil
         var photoType = "snap"
@@ -187,6 +188,7 @@ final class GroupRepository: ObservableObject {
             "missionId": missionId as Any,
             "photoType": photoType,
             "imageUrl": imageUrl,
+            "thumbUrl": thumbUrl as Any,
             "caption": caption,
             "timestamp": Timestamp(date: Date()),
             "isCleared": isCleared,

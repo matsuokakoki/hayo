@@ -10,6 +10,9 @@ import UserNotifications
 class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Larger HTTP cache so photos are re-read from disk instead of the network.
+        URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024,
+                                   diskCapacity: 256 * 1024 * 1024)
         FirebaseApp.configure()
         GMSServices.provideAPIKey("AIzaSyAvqFiM5KBtgi4hv72vPD8NnUpjTi0nK8Y")
         let center = UNUserNotificationCenter.current()

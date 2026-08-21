@@ -62,13 +62,10 @@ struct PhotoDetailPage: View {
 
     var body: some View {
         ZStack {
-            AsyncImage(url: URL(string: photo.imageUrl)) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFit()
-                } else {
-                    ProgressView()
-                }
+            CachedImage(urlString: photo.imageUrl) {
+                ProgressView().tint(.white)
             }
+            .aspectRatio(contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.black.opacity(0.9))
 

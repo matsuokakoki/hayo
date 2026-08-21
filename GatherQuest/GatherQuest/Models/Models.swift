@@ -82,6 +82,8 @@ struct SharedPhoto: Identifiable, Codable {
     var missionId: String?
     var photoType: String
     var imageUrl: String
+    /// Small copy used by the SNAP grid (falls back to imageUrl for old posts).
+    var thumbUrl: String?
     var caption: String
     var timestamp: Date
     var isCleared: Bool

@@ -112,13 +112,17 @@ struct PhotoPreviewView: View {
                     let url = try await StorageService.uploadImage(image, groupId: groupId, folder: "icons")
                     try await repo.markDeparted(groupId: groupId, iconUrl: url)
                 case .arrival:
-                    let url = try await StorageService.uploadImage(image, groupId: groupId, folder: "arrivals")
-                    try await repo.postPhoto(groupId: groupId, imageUrl: url,
+                    let result = try await StorageService.uploadPhotoWithThumbnail(
+                        image, groupId: groupId, folder: "arrivals")
+                    try await repo.postPhoto(groupId: groupId, imageUrl: result.url,
+                                             thumbUrl: result.thumbUrl,
                                              caption: caption, purpose: .arrival)
                     try await repo.markArrived(groupId: groupId)
                 case .mission, .snap:
-                    let url = try await StorageService.uploadImage(image, groupId: groupId, folder: "photos")
-                    try await repo.postPhoto(groupId: groupId, imageUrl: url,
+                    let result = try await StorageService.uploadPhotoWithThumbnail(
+                        image, groupId: groupId, folder: "photos")
+                    try await repo.postPhoto(groupId: groupId, imageUrl: result.url,
+                                             thumbUrl: result.thumbUrl,
                                              caption: caption, purpose: purpose)
                 }
                 onDone()

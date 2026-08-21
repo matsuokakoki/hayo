@@ -70,13 +70,9 @@ struct UserIconView: View {
 
     var body: some View {
         Group {
-            if let urlString, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        Color(.systemGray4)
-                    }
+            if urlString != nil {
+                CachedImage(urlString: urlString, targetPoints: size) {
+                    Color(.systemGray4)
                 }
             } else {
                 ZStack {

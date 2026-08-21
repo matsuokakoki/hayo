@@ -146,12 +146,9 @@ struct PhotoThumb: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            AsyncImage(url: URL(string: photo.imageUrl)) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Color(.systemGray5)
-                }
+            // Prefer the small thumbnail; old posts fall back to the full image.
+            CachedImage(urlString: photo.thumbUrl ?? photo.imageUrl, targetPoints: 160) {
+                Color(.systemGray5)
             }
             .frame(minWidth: 110, minHeight: 110)
             .aspectRatio(1, contentMode: .fill)
