@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import GoogleMaps
 import CoreLocation
+import MapKit
 
 // ② Group creation: name, destination (Google Maps), meet time.
 struct CreateGroupView: View {
@@ -39,7 +40,7 @@ struct CreateGroupView: View {
             }
 
             Text("集合時間").font(.headline)
-            DatePicker("", selection: $meetTime, displayedComponents: [.date, .hourAndMinute])
+            DatePicker("", selection: $meetTime, in: Date()..., displayedComponents: [.date, .hourAndMinute])
                 .datePickerStyle(.compact)
                 .labelsHidden()
                 .environment(\.locale, Locale(identifier: "ja_JP"))
@@ -109,19 +110,81 @@ struct StaticMapPreview: UIViewRepresentable {
     }
 }
 
-// MARK: - Full-screen destination picker (tap to drop pin)
+// MARK: - Full-screen destination picker (search or tap to drop pin)
 
 struct DestinationPickerView: View {
     @Binding var selected: CLLocationCoordinate2D?
     @Environment(\.dismiss) var dismiss
     @State private var temp: CLLocationCoordinate2D?
+    @State private var focus: CLLocationCoordinate2D?
+
+    @State private var query = ""
+    @State private var results: [MKMapItem] = []
+    @State private var searching = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            TapPickerMap(selected: $temp)
+            TapPickerMap(selected: $temp, focus: focus)
                 .ignoresSafeArea()
+
+            // Search bar + results (top)
+            VStack(spacing: 0) {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                    TextField("場所を検索（例: 渋谷駅）", text: $query)
+                        .autocorrectionDisabled()
+                        .submitLabel(.search)
+                        .onSubmit { search() }
+                    if !query.isEmpty {
+                        Button {
+                            query = ""; results = []
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 12).fill(.thickMaterial))
+
+                if searching {
+                    ProgressView().padding(8)
+                } else if !results.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(results.prefix(6).enumerated()), id: \.offset) { _, item in
+                                Button {
+                                    pick(item)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name ?? "名称不明")
+                                            .font(.subheadline.bold())
+                                            .foregroundColor(.primary)
+                                        if let address = item.placemark.title {
+                                            Text(address)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12).padding(.vertical, 10)
+                                }
+                                Divider()
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 240)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(.thickMaterial))
+                    .padding(.top, 4)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
+            // Confirm (bottom)
             VStack(spacing: 8) {
-                Text(temp == nil ? "地図をタップして目的地を設定" : "この場所でよろしいですか？")
+                Text(temp == nil ? "検索するか、地図をタップして目的地を設定" : "この場所でよろしいですか？")
                     .font(.subheadline.bold())
                     .padding(8)
                     .background(Capsule().fill(.thinMaterial))
@@ -139,10 +202,40 @@ struct DestinationPickerView: View {
             .padding(.bottom, 32)
         }
     }
+
+    /// MKLocalSearch: POI search with no API key (keeps the Maps key restricted).
+    private func search() {
+        guard !query.isEmpty else { return }
+        searching = true
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        if let center = LocationService.shared.current?.coordinate {
+            request.region = MKCoordinateRegion(center: center,
+                                                latitudinalMeters: 50_000,
+                                                longitudinalMeters: 50_000)
+        }
+        MKLocalSearch(request: request).start { response, _ in
+            DispatchQueue.main.async {
+                searching = false
+                results = response?.mapItems ?? []
+            }
+        }
+    }
+
+    private func pick(_ item: MKMapItem) {
+        let coordinate = item.placemark.coordinate
+        temp = coordinate
+        focus = coordinate      // moves the camera and drops the pin
+        results = []
+        query = item.name ?? query
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
 }
 
 struct TapPickerMap: UIViewRepresentable {
     @Binding var selected: CLLocationCoordinate2D?
+    var focus: CLLocationCoordinate2D?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -159,14 +252,31 @@ struct TapPickerMap: UIViewRepresentable {
         return map
     }
 
-    func updateUIView(_ map: GMSMapView, context: Context) {}
+    func updateUIView(_ map: GMSMapView, context: Context) {
+        // A search result was picked: move the camera there and drop the pin.
+        if let focus, context.coordinator.lastFocus?.latitude != focus.latitude
+            || context.coordinator.lastFocus?.longitude != focus.longitude {
+            context.coordinator.lastFocus = focus
+            context.coordinator.placeMarker(at: focus, on: map)
+            map.animate(to: GMSCameraPosition(target: focus, zoom: 16))
+        }
+    }
 
     final class Coordinator: NSObject, GMSMapViewDelegate {
         let parent: TapPickerMap
         var marker: GMSMarker?
+        var lastFocus: CLLocationCoordinate2D?
         private var cancellable: AnyCancellable?
         private var centered = false
         init(_ parent: TapPickerMap) { self.parent = parent }
+
+        func placeMarker(at coordinate: CLLocationCoordinate2D, on map: GMSMapView) {
+            marker?.map = nil
+            let m = GMSMarker(position: coordinate)
+            m.icon = GMSMarker.markerImage(with: .red)
+            m.map = map
+            marker = m
+        }
 
         /// If no GPS fix existed when the map opened, recenter once when the first fix arrives.
         func observeLocation(map: GMSMapView, alreadyCentered: Bool) {
@@ -184,11 +294,7 @@ struct TapPickerMap: UIViewRepresentable {
 
         func mapView(_ mapView: GMSMapView, didTapAt coordinate: CLLocationCoordinate2D) {
             parent.selected = coordinate
-            marker?.map = nil
-            let m = GMSMarker(position: coordinate)
-            m.icon = GMSMarker.markerImage(with: .red)
-            m.map = mapView
-            marker = m
+            placeMarker(at: coordinate, on: mapView)
         }
     }
 }

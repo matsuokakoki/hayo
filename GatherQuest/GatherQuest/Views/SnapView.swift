@@ -9,6 +9,7 @@ struct SnapView: View {
     @Binding var seenPhotoIds: Set<String>
 
     @State private var detailPhoto: SharedPhoto?
+    @State private var missionDetail: Mission?
 
     private var visibleMissions: [Mission] {
         repo.missions.filter { $0.isPublished }
@@ -27,7 +28,11 @@ struct SnapView: View {
                         MissionChip(mission: mission,
                                     cleared: repo.cleared(mission: mission)) {
                             if mission.isActive && !repo.cleared(mission: mission) {
+                                // Still open: shoot the mission photo.
                                 onOpenCamera(.mission(mission))
+                            } else {
+                                // Cleared (or expired): browse everyone's cleared photos.
+                                missionDetail = mission
                             }
                         }
                     }
@@ -40,6 +45,14 @@ struct SnapView: View {
                 .padding(.horizontal)
             }
             .padding(.vertical, 8)
+            // Mission gallery: cleared photos for the tapped mission.
+            .fullScreenCover(item: $missionDetail) { mission in
+                PhotoDetailView(groupId: groupId,
+                                photos: repo.photos.filter {
+                                    $0.missionId == mission.id && $0.isCleared
+                                },
+                                initialPhotoId: nil)
+            }
 
             Divider()
 

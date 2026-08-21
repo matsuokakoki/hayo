@@ -43,7 +43,7 @@ struct ProfileEntryView: View {
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color(.systemGray5)))
 
             Text("出発予定時刻").font(.headline)
-            DatePicker("", selection: $departureTime, displayedComponents: .hourAndMinute)
+            DatePicker("", selection: $departureTime, in: Date()..., displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .frame(maxWidth: .infinity)

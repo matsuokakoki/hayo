@@ -7,15 +7,16 @@ final class CameraService: NSObject, ObservableObject, AVCapturePhotoCaptureDele
     let session = AVCaptureSession()
     private let output = AVCapturePhotoOutput()
     private var device: AVCaptureDevice?
-    private var position: AVCaptureDevice.Position = .back
+    private var position: AVCaptureDevice.Position = .front
     private var captureCompletion: ((UIImage?) -> Void)?
 
     @Published var zoomLabel: String = "x1"
 
-    func configure() {
+    /// Default is the front camera; pass `.back` for photo missions etc.
+    func configure(position: AVCaptureDevice.Position = .front) {
         session.beginConfiguration()
         session.sessionPreset = .photo
-        setDevice(position: .back)
+        setDevice(position: position)
         if session.canAddOutput(output) { session.addOutput(output) }
         session.commitConfiguration()
         // On dual-wide virtual devices the native factor 1.0 is the 0.5x

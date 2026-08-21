@@ -31,8 +31,12 @@ struct MainView: View {
                 .font(.title2.bold())
                 .padding(.vertical, 6)
 
-            // ⑨ shared mission header
-            MissionHeaderView(mission: headerMission)
+            // ⑨ shared mission header — tap to open the mission camera
+            MissionHeaderView(mission: headerMission) { mission in
+                if mission.isActive && !repo.cleared(mission: mission) {
+                    cameraPurpose = .mission(mission)
+                }
+            }
 
             // Tab content
             ZStack {

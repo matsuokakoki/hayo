@@ -4,25 +4,36 @@ import SwiftUI
 
 struct MissionHeaderView: View {
     let mission: Mission?
+    /// Tap the banner to open the mission camera (while the mission is active).
+    var onTap: ((Mission) -> Void)? = nil
 
     var body: some View {
         if let mission, mission.isPublished {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remaining = Int(mission.expiresAt.timeIntervalSince(context.date))
-                HStack {
-                    Text("📸 \(mission.title)")
-                        .font(.subheadline.bold())
-                        .lineLimit(1)
-                    Spacer()
-                    Text(remaining > 0
-                         ? String(format: "%02d:%02d", remaining / 60, remaining % 60)
-                         : "時間切れ")
-                        .font(.subheadline.monospacedDigit().bold())
+                Button {
+                    onTap?(mission)
+                } label: {
+                    HStack {
+                        Text("📸 \(mission.title)")
+                            .font(.subheadline.bold())
+                            .lineLimit(1)
+                        Spacer()
+                        if remaining > 0 {
+                            Image(systemName: "camera.fill").font(.subheadline)
+                        }
+                        Text(remaining > 0
+                             ? String(format: "%02d:%02d", remaining / 60, remaining % 60)
+                             : "時間切れ")
+                            .font(.subheadline.monospacedDigit().bold())
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(remaining > 0 ? Color.red.opacity(0.85) : Color.gray)
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(remaining > 0 ? Color.red.opacity(0.85) : Color.gray)
+                .buttonStyle(.plain)
+                .disabled(remaining <= 0 || onTap == nil)
             }
         }
     }

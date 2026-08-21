@@ -96,7 +96,14 @@ struct CameraView: View {
                 }
             }
         }
-        .onAppear { camera.configure() }
+        .onAppear {
+            // Photo missions default to the back camera; everything else starts on the front.
+            if case .mission = purpose {
+                camera.configure(position: .back)
+            } else {
+                camera.configure()
+            }
+        }
         .onDisappear { camera.stop() }
     }
 
