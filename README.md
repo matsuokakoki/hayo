@@ -1,4 +1,4 @@
-# hayo — 待ち合わせをエンタメ化するアプリ
+# hayo — 待ち合わせをエンタメに
 
 > NxTEND THE HACK 2026 / Team 25
 
