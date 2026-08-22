@@ -13,9 +13,10 @@
 | 機能 | 内容 |
 |---|---|
 | **リアルタイム位置共有** | 出発したメンバーの現在地を地図上に表示。ピンは出発時に撮った本人の丸型写真になります |
-| **「はよ」催促** | 出発予定時刻を過ぎても動かないメンバーを急かせます。押された回数が `×N` で溜まり、本人に通知が飛びます |
-| **フォトミッション** | 移動中にランダムなお題が突然配信されます。2分以内に写真を投稿するとクリア（青チェック） |
-| **フォトチャット** | お題以外にも自由に写真を撮って共有。キャプションを重ねて投稿でき、👍と「はよ」でリアクションできます |
+| **「はよ」催促** | 出発予定時刻を過ぎても動かないメンバーを急かせます。押された回数が `×N` で溜まり、本人に通知が届きます |
+| **フォトミッション** | 移動中にランダムなお題が突然配信されます。2分以内に写真を投稿するとクリア（青チェック）。赤いバナーをタップすればその場でカメラが開きます |
+| **フォトチャット** | お題以外にも自由に写真を撮って共有。キャプションを重ねて投稿でき、👍と「はよ」でリアクションできます（1人1回まで） |
+| **ミッションギャラリー** | クリア済みのミッションアイコンをタップすると、そのお題でクリアした全員の写真を閲覧できます |
 | **到着ランキング** | 集合時間との差（±分）とミッションクリア数で順位を表示 |
 | **10分後の自動消滅** | Cloud Functions が Firestore と Storage のデータを完全削除します |
 
@@ -43,11 +44,12 @@
 
 **iOS（Swift 5 / SwiftUI, iOS 16+）**
 
-- SwiftUI — 全画面をコードで構築
+- SwiftUI — 全画面をコードで構築。縦向き固定
 - Google Maps SDK for iOS — 地図・ピン表示・目的地選択
+- MapKit（`MKLocalSearch`）— 目的地の地名検索。APIキー不要
 - CoreLocation — 位置情報取得（`distanceFilter` によるフィルタリング）
 - AVFoundation — カメラ制御（BeReal風の丸型UI・倍率切替・イン/アウト切替）
-- UserNotifications — アプリ内バナー＋ローカル通知
+- UserNotifications — アプリ内バナー＋システム通知
 
 **バックエンド（Firebase）**
 
@@ -66,7 +68,7 @@
 │   └── GatherQuest/
 │       ├── App/HayoApp.swift       # エントリポイント・匿名認証・画面遷移
 │       ├── Models/Models.swift     # Firestoreデータモデル
-│       ├── Services/               # Firestore / Storage / 位置情報 / カメラ / 通知
+│       ├── Services/               # Firestore / Storage / 画像キャッシュ / 位置情報 / カメラ / 通知
 │       ├── Views/                  # 全12画面 + 共通コンポーネント
 │       ├── Assets.xcassets         # アプリアイコン
 │       └── Info.plist              # 権限設定・表示名
@@ -82,19 +84,37 @@
 
 ハッカソンという時間制約の中で、以下の方針を採りました。
 
-**プッシュ通知（APNs）を使わない**
+### 通知はローカル通知で完結させる
 
-証明書の設定に時間を取られるリスクを避け、Firestoreの変更監視 → アプリ内バナー＋ローカル通知という構成にしました。アプリ使用中も即座に通知が表示されるよう `UNUserNotificationCenterDelegate` で前景表示を有効化しています。体験上の差はほとんどなく、設定不備で通知が一切届かないリスクを排除できます。
+証明書やAPNs設定の不備で通知が一切届かないリスクを避けるため、**Firestoreの変更監視 → アプリ内バナー＋ローカル通知**という構成にしています。ミッション配信や「はよ」を検知した端末が、自分でシステム通知を発行する仕組みです。
 
-**位置情報の書き込み頻度を制限**
+ユーザーから見た挙動はリモートプッシュと変わりません。ロック画面にも通知センターにも同じ形で表示されます。加えて `UNUserNotificationCenterDelegate` の `willPresent` を実装し、**アプリ使用中でも通知が即座に表示される**ようにしています（iOSは既定で前景通知を抑制するため、これがないと通知が溜まって後からまとめて届きます）。
+
+制約は「アプリが完全に終了している間は通知が届かない」点のみです。移動中はアプリを開いたままにする想定のため、実用上の影響はありません。将来的にFCMを追加する場合も、通知の発火箇所は `NotificationService` に集約してあるため差し替えは容易です。
+
+### 位置情報の書き込み頻度を制限
 
 CoreLocationの値をそのままFirestoreに流すと書き込みが爆発します。`distanceFilter = 10m`（OS側の間引き）と**15秒に1回まで**（アプリ側の間引き）の二段構えで抑制しています。加えて出発ボタンを押した瞬間だけは即時書き込みを行い、ピンがすぐ表示されるようにしています。
 
-**リアクションは1人1回**
+15秒は徒歩で約20mの誤差にあたり、GPS自体の精度（±10m前後）を考えれば十分な粒度です。
 
-`likedBy` / `hayoBy` に反応済みユーザーIDを保持し、連打による水増しを防いでいます。
+### 画像は用途ごとにリサイズし、キャッシュを共有する
 
-**Dynamic Island（Live Activities）は未実装**
+iPhoneの写真は1枚3〜5MBあり、そのまま扱うと通信量と待ち時間が跳ね上がります。アップロード時に用途別へ縮小し、さらに一覧用のサムネイルを別途生成しています。
+
+| 用途 | 長辺 | 概算サイズ |
+|---|---|---|
+| アイコン（地図ピン・アバター） | 512px | 約50KB |
+| 共有写真（全画面表示） | 1440px | 約200KB |
+| サムネイル（SNAP一覧） | 320px | 約20KB |
+
+表示側は自前の `ImageLoader`（メモリキャッシュ＋デコード時ダウンサンプリング）を全画面で共有しています。SwiftUI標準の `AsyncImage` は再表示のたびに再ダウンロードするため使用していません。この2点で写真関連の通信量は**約20分の1**になりました。
+
+### 目的地検索にMapKitを使う
+
+地名検索にGoogle Places APIを使うとAPIキーの権限を広げる必要があります。表示はGoogle Maps SDK、検索はAppleの `MKLocalSearch` と役割を分けることで、**APIキーをMaps SDK for iOSのみに制限したまま**検索機能を実現しています。キーが流出しても悪用範囲が広がりません。
+
+### Dynamic Island（Live Activities）は未実装
 
 コア機能の完成を優先したため、Nice-to-have として見送りました。
 
@@ -167,9 +187,11 @@ groups/{groupId}/missions/{missionId}          # Cloud Functionsのみが作成
   title, publishAt, expiresAt
 
 groups/{groupId}/photos/{photoId}
-  userId, missionId?, photoType(mission|snap|arrival), imageUrl, caption,
-  timestamp, isCleared, likeCount, hayoReactionCount, likedBy[], hayoBy[]
+  userId, missionId?, photoType(mission|snap|arrival), imageUrl, thumbUrl,
+  caption, timestamp, isCleared, likeCount, hayoReactionCount, likedBy[], hayoBy[]
 ```
+
+`expectedDepartureTime` は自己申告の出発予定時刻、`departureTime` は実際に出発ボタンを押した時刻です。ロビーでは出発前後で表示が切り替わります。
 
 ## Cloud Functions
 
@@ -191,3 +213,5 @@ groups/{groupId}/photos/{photoId}
 **ビルドエラー `FirebaseFirestoreSwift`** — SDK 11以降は `FirebaseFirestore` に統合済みです。SDK 10.x を使う場合のみ追加してください。
 
 **地図にピンが出ない** — 位置情報の権限が「許可しない」になっていないか、また出発ボタンを押して `departed` 状態になっているかご確認ください。
+
+**古い写真の表示が遅い** — 画像最適化を入れる前に投稿された写真は原寸のままです。新しいグループを作成してお試しください。
