@@ -12,7 +12,7 @@ struct LobbyView: View {
                 // Tap -> open the destination in the Google Maps app (template ⑤).
                 Button { openInGoogleMaps(group) } label: {
                     StaticMapPreview(coordinate: group.destinationCoordinate)
-                        .frame(height: 160)
+                        .frame(height: 200)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .padding(.horizontal)
@@ -20,6 +20,7 @@ struct LobbyView: View {
                     .font(.caption).foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.horizontal)
+                    .padding(.top, 8) // uniform gap below the map across screens
             }
 
             HStack {
@@ -28,7 +29,7 @@ struct LobbyView: View {
                 Text("出発時間").font(.caption).foregroundColor(.secondary)
             }
             .padding(.horizontal)
-            .padding(.top, 8)
+            .padding(.top, 16)
 
             ScrollView {
                 VStack(spacing: 12) {

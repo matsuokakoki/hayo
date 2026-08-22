@@ -18,14 +18,17 @@ struct ProfileEntryView: View {
                 .frame(maxWidth: .infinity)
 
             if let group {
-                Button { openInGoogleMaps(group) } label: {
-                    StaticMapPreview(coordinate: group.destinationCoordinate)
-                        .frame(height: 180)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                // Map + caption as one unit with a uniform 8pt gap (matches other screens).
+                VStack(spacing: 8) {
+                    Button { openInGoogleMaps(group) } label: {
+                        StaticMapPreview(coordinate: group.destinationCoordinate)
+                            .frame(height: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    Text("タッチしてGoogleMapsで開く")
+                        .font(.caption).foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                Text("タッチしてGoogleMapsで開く")
-                    .font(.caption).foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
 
                 HStack {
                     Text("集合時間").font(.headline)

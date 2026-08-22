@@ -7,6 +7,8 @@ import MapKit
 // ② Group creation: name, destination (Google Maps), meet time.
 struct CreateGroupView: View {
     @EnvironmentObject var app: AppState
+    // Observed so the preview re-centers when the first GPS fix arrives.
+    @ObservedObject private var location = LocationService.shared
     @State private var name = ""
     @State private var destination: CLLocationCoordinate2D?
     @State private var meetTime = Date().addingTimeInterval(3600)
@@ -20,23 +22,27 @@ struct CreateGroupView: View {
             }
 
             Text("グループ名").font(.headline)
-            TextField("例: 渋谷メンバー", text: $name)
+            TextField("例: THE HACK 2026", text: $name)
                 .padding()
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color(.systemGray5)))
 
             Text("目的地").font(.headline)
-            Button { showPicker = true } label: {
-                ZStack {
-                    if let destination {
-                        StaticMapPreview(coordinate: destination)
-                    } else {
-                        RoundedRectangle(cornerRadius: 10).fill(Color(.systemGray5))
-                        Text("タッチして地図から目的地を選択")
-                            .foregroundColor(.secondary)
-                    }
+            // Map + caption as one unit with a uniform 8pt gap (matches other screens).
+            VStack(spacing: 8) {
+                Button { showPicker = true } label: {
+                    // Before a destination is chosen, preview the user's current location.
+                    StaticMapPreview(coordinate: destination ?? currentCoordinate,
+                                     showsMarker: destination != nil)
+                        .frame(height: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .frame(height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                Text(destination == nil
+                     ? "タッチして地図から目的地を選択"
+                     : "タッチして目的地を変更")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
             Text("集合時間").font(.headline)
@@ -73,6 +79,12 @@ struct CreateGroupView: View {
 
     private var canCreate: Bool { !name.isEmpty && destination != nil }
 
+    /// Current location, falling back to Tokyo until the first GPS fix.
+    private var currentCoordinate: CLLocationCoordinate2D {
+        location.current?.coordinate
+            ?? CLLocationCoordinate2D(latitude: 35.681236, longitude: 139.767125)
+    }
+
     private func create() {
         guard let destination else { return }
         isCreating = true
@@ -93,17 +105,21 @@ struct CreateGroupView: View {
 
 struct StaticMapPreview: UIViewRepresentable {
     let coordinate: CLLocationCoordinate2D
+    /// Red destination pin. Off when previewing the user's own location.
+    var showsMarker: Bool = true
 
     func makeUIView(context: Context) -> GMSMapView {
         let map = GMSMapView(frame: .zero,
                              camera: GMSCameraPosition(target: coordinate, zoom: 15))
         map.isUserInteractionEnabled = false
+        map.isMyLocationEnabled = true
         return map
     }
 
     func updateUIView(_ map: GMSMapView, context: Context) {
         map.clear()
         map.animate(to: GMSCameraPosition(target: coordinate, zoom: 15))
+        guard showsMarker else { return }
         let marker = GMSMarker(position: coordinate)
         marker.icon = GMSMarker.markerImage(with: .red)
         marker.map = map

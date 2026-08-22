@@ -15,7 +15,8 @@ struct PhotoDetailView: View {
         VStack(spacing: 0) {
             if photos.isEmpty {
                 Spacer()
-                Text("写真はまだありません").foregroundColor(.secondary)
+                Text("写真はまだありません")
+                    .foregroundColor(.white.opacity(0.7))
                 Spacer()
             } else {
                 TabView(selection: $index) {
@@ -30,13 +31,17 @@ struct PhotoDetailView: View {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.title3.bold())
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                     .frame(width: 56, height: 56)
-                    .background(Circle().fill(Color(.systemGray5)))
+                    .background(Circle().fill(Color.white.opacity(0.18)))
+                    .overlay(Circle().stroke(Color.white.opacity(0.35), lineWidth: 1))
             }
-            .padding(.bottom, 12)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
-        .background(Color(.systemBackground))
+        // Always dark, in both appearances — keeps attention on the photo.
+        .background(Color.black.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .onAppear {
             if let initialPhotoId,
                let i = photos.firstIndex(where: { $0.id == initialPhotoId }) {
@@ -67,7 +72,7 @@ struct PhotoDetailPage: View {
             }
             .aspectRatio(contentMode: .fit)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black.opacity(0.9))
+            .background(Color.black)
 
             VStack {
                 // Mission band (blue) if this was a mission photo
