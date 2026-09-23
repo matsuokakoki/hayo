@@ -1,5 +1,6 @@
 # Hayo
 
+A four-person iOS team project that makes meetup coordination more engaging through temporary groups, live location sharing, and photo missions. I contributed to the product idea and UX direction and led technology selection; the app’s design and implementation are team work.
 待ち合わせ中の「あと何分？」「今どこ？」を、位置共有と写真ミッションで楽しめる体験に変えるiOSアプリです。メンバーは招待コードで一時グループに参加し、地図で互いの位置を見ながら、移動中のフォトミッションや写真リアクションを楽しめます。
 
 **4人チームで開発したプロジェクトのportfolio mirrorです。** 元の開発リポジトリは [NxTEND-THE-HACK/2026-Team-25](https://github.com/NxTEND-THE-HACK/2026-Team-25) です。チームメンバーの了承を得て、このミラーをPublic公開しています。開発では友人のMac 1台を4人で共同利用したため、Gitのcommit authorや履歴は各メンバーの個人貢献を正確・完全には反映していません。
